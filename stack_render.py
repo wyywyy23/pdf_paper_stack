@@ -3,7 +3,7 @@ import os
 import math
 import random
 
-paper = "cicc24"
+paper = "spie23"
 
 # Delete every thing in the startup scene
 bpy.ops.object.select_all(action="SELECT")
@@ -23,11 +23,12 @@ bpy.ops.preferences.addon_enable(module="io_import_images_as_planes")
 z_offset = 0.001
 z_position = 0
 
-degree_rotate = 1.5
+degree_rotate_max = 1.5
 
 images = sorted(
     [img for img in os.listdir(path) if img.endswith(".png") or img.endswith(".jpg")]
 )
+degree_rotate = max(degree_rotate_max / len(images) * 8, degree_rotate_max)
 
 for i, img in enumerate(images):
     bpy.ops.import_image.to_plane(files=[{"name": img}], directory=path)
