@@ -3,7 +3,7 @@ import os
 import math
 import random
 
-paper = "spie23"
+paper = "t-cpmt24"
 
 # Delete every thing in the startup scene
 bpy.ops.object.select_all(action="SELECT")
