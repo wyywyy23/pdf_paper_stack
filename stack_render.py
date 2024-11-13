@@ -4,7 +4,10 @@ import random
 
 import bpy
 
-paper = "t-cpmt24"
+paper = "spie23"
+
+# Set random seed for reproducibility
+random.seed(2441622110)
 
 # Delete every thing in the startup scene
 bpy.ops.object.select_all(action="SELECT")
@@ -53,8 +56,8 @@ for i, img in enumerate(images):
 
     # Create a new texture node
     texture_node = nodes.new(type="ShaderNodeTexNoise")
-    texture_node.inputs["Scale"].default_value = 500
-    texture_node.inputs["Detail"].default_value = 50
+    texture_node.inputs["Scale"].default_value = 200
+    texture_node.inputs["Detail"].default_value = 10
     texture_node.inputs["Roughness"].default_value = 0.5
 
     # Create a bump node
@@ -67,6 +70,30 @@ for i, img in enumerate(images):
     # Link the bump node to the Principled BSDF node
     principled_bsdf = nodes.get("Principled BSDF")
     links.new(bump_node.outputs["Normal"], principled_bsdf.inputs["Normal"])
+
+    # Create a new texture node for macro scale noise
+    macro_texture_node = nodes.new(type="ShaderNodeTexNoise")
+    macro_texture_node.inputs["Scale"].default_value = 2
+    macro_texture_node.inputs["Detail"].default_value = 1
+    macro_texture_node.inputs["Roughness"].default_value = 0.5
+
+    # Create another bump node for macro scale noise
+    macro_bump_node = nodes.new(type="ShaderNodeBump")
+    macro_bump_node.inputs["Strength"].default_value = 0.5
+
+    # Link the macro texture node to the macro bump node
+    links.new(macro_texture_node.outputs["Fac"], macro_bump_node.inputs["Height"])
+
+    # Combine the macro bump with the existing bump
+    combine_bump_node = nodes.new(type="ShaderNodeMixRGB")
+    combine_bump_node.blend_type = "ADD"
+    combine_bump_node.inputs["Fac"].default_value = 1.0
+
+    links.new(bump_node.outputs["Normal"], combine_bump_node.inputs[1])
+    links.new(macro_bump_node.outputs["Normal"], combine_bump_node.inputs[2])
+
+    # Link the combined bump node to the Principled BSDF node
+    links.new(combine_bump_node.outputs["Color"], principled_bsdf.inputs["Normal"])
 
     imported_object.location.y = imported_object.dimensions.y * 2
     # Rotate around object center
@@ -148,7 +175,7 @@ rz = -10
 lens = 85
 use_dof = True
 focus_distance = 2.38
-fstop = 4
+fstop = 2.8
 samples = 1024
 denoise = False
 
