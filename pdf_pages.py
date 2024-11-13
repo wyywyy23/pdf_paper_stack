@@ -1,6 +1,7 @@
-from pdf2image import convert_from_path
-import sys
 import os
+import sys
+
+from pdf2image import convert_from_path
 
 
 def pdf_to_images(pdf_path, output_folder):

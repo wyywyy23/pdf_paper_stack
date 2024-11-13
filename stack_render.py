@@ -1,7 +1,8 @@
-import bpy
-import os
 import math
+import os
 import random
+
+import bpy
 
 paper = "t-cpmt24"
 
