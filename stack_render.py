@@ -4,7 +4,7 @@ import random
 
 import bpy
 
-paper = "spie23"
+paper = "ofc23"
 
 # Set random seed for reproducibility
 random.seed(2441622110)
@@ -24,7 +24,7 @@ bpy.context.space_data.shading.type = "RENDERED"
 path = "img/" + paper
 bpy.ops.preferences.addon_enable(module="io_import_images_as_planes")
 
-z_offset = 0.001
+z_offset = 0.0005
 z_position = 0
 
 degree_rotate_max = 1.5
@@ -56,13 +56,13 @@ for i, img in enumerate(images):
 
     # Create a new texture node
     texture_node = nodes.new(type="ShaderNodeTexNoise")
-    texture_node.inputs["Scale"].default_value = 200
-    texture_node.inputs["Detail"].default_value = 10
+    texture_node.inputs["Scale"].default_value = 500
+    texture_node.inputs["Detail"].default_value = 250
     texture_node.inputs["Roughness"].default_value = 0.5
 
     # Create a bump node
     bump_node = nodes.new(type="ShaderNodeBump")
-    bump_node.inputs["Strength"].default_value = 0.1
+    bump_node.inputs["Strength"].default_value = 0.05
 
     # Link the texture node to the bump node
     links.new(texture_node.outputs["Fac"], bump_node.inputs["Height"])
@@ -73,8 +73,8 @@ for i, img in enumerate(images):
 
     # Create a new texture node for macro scale noise
     macro_texture_node = nodes.new(type="ShaderNodeTexNoise")
-    macro_texture_node.inputs["Scale"].default_value = 2
-    macro_texture_node.inputs["Detail"].default_value = 1
+    macro_texture_node.inputs["Scale"].default_value = 1.5
+    macro_texture_node.inputs["Detail"].default_value = 0.5
     macro_texture_node.inputs["Roughness"].default_value = 0.5
 
     # Create another bump node for macro scale noise
@@ -111,57 +111,19 @@ bpy.ops.mesh.primitive_plane_add(size=10, location=(0, 0, z_position - z_offset)
 background_plane = bpy.context.object
 background_plane.name = "BackgroundPlane"
 
-# Add a clear glass block with the size of the background plane covering the planes
-bpy.ops.mesh.primitive_cube_add(size=10, location=(0, 0, 0))
-glass_block = bpy.context.object
-glass_block.name = "GlassBlock"
-glass_block.scale = (1, 1, (-z_position + z_offset + 50 * z_offset) / 10)
-glass_block.location.z = (
-    z_position - z_offset + glass_block.dimensions.z * glass_block.scale[2] / 2
-)
-glass_block.data.materials.append(bpy.data.materials.new(name="Glass"))
-glass_material = glass_block.data.materials[0]
-glass_material.use_nodes = True
-if glass_material.node_tree.nodes.get("Principled BSDF"):
-    glass_material.node_tree.nodes.remove(
-        glass_material.node_tree.nodes.get("Principled BSDF")
-    )
-mat_output = glass_material.node_tree.nodes.get("Material Output")
-glass_bsdf = glass_material.node_tree.nodes.new("ShaderNodeBsdfGlass")
-glass_bsdf.inputs["Roughness"].default_value = 0
-glass_bsdf.inputs["IOR"].default_value = 1.45
-glass_bsdf.inputs["Color"].default_value = (0.6, 0.6, 0.6, 1)
-glass_material.node_tree.links.new(mat_output.inputs[0], glass_bsdf.outputs[0])
-glass_block.active_material = glass_material
+# Add wood manually
+# asset_base_id:752306e7-fb72-4a84-89a1-3be404dcdc38 asset_type:material
 
-# Change background plane color to gray with a matte finish
-background_plane.data.materials.append(bpy.data.materials.new(name="Background"))
-background_material = background_plane.data.materials[0]
-background_material.use_nodes = True
-background_material.node_tree.nodes["Principled BSDF"].inputs[
-    "Base Color"
-].default_value = (0.56, 0.77, 1, 1)
-background_plane.data.materials[0].node_tree.nodes["Principled BSDF"].inputs[
-    "Specular"
-].default_value = 0
-background_plane.data.materials[0].node_tree.nodes["Principled BSDF"].inputs[
-    "Roughness"
-].default_value = 1
-
-
-# Add sky texture to world
-sun_intensity = 1  # default is 1
-sun_rotation = 45  # default is 0
-
-world = bpy.data.worlds["World"]
-world.use_nodes = True
-bg = world.node_tree.nodes["Background"]
-sky = world.node_tree.nodes.new("ShaderNodeTexSky")
-world.node_tree.links.new(sky.outputs[0], bg.inputs[0])
-# set the sun intensity
-sky.sun_intensity = sun_intensity
-# set the sun rotation
-sky.sun_rotation = sun_rotation * math.pi / 180
+# Add a soft white light at (5, 5, 5)
+bpy.ops.object.light_add(type="SPOT", location=(-5, 5, 5))
+light = bpy.context.object
+light.data.energy = 1500
+light.data.color = (0.956, 0.839, 0.761)
+light.data.spot_size = math.radians(45)
+light.data.spot_blend = 0.15
+light.rotation_euler[0] = math.radians(-34)
+light.rotation_euler[1] = math.radians(-37)
+light.rotation_euler[2] = math.radians(15)
 
 # Add camera
 bpy.ops.object.camera_add()
@@ -175,7 +137,7 @@ rz = -10
 lens = 85
 use_dof = True
 focus_distance = 2.38
-fstop = 2.8
+fstop = 1.8
 samples = 1024
 denoise = False
 
@@ -198,8 +160,8 @@ bpy.context.object.data.dof.aperture_fstop = fstop
 bpy.ops.view3d.object_as_camera()
 
 # Set to Standard and Very Low Contrast
-bpy.context.scene.view_settings.view_transform = "Standard"
-bpy.context.scene.view_settings.look = "Medium High Contrast"
+bpy.context.scene.view_settings.view_transform = "Filmic"
+bpy.context.scene.view_settings.look = "Very High Contrast"
 
 # Set max samples in render
 bpy.context.scene.cycles.samples = samples
@@ -212,10 +174,8 @@ bpy.context.scene.render.film_transparent = True
 
 # Save project file
 bpy.ops.wm.save_as_mainfile(
-    filepath="prj/{}_suni_{}_sunr_{}_x_{}_y_{}_z_{}_rx_{}_ry_{}_rz_{}_lens_{}_dof_{}_dist_{}_fstop_{}_samp_{}_denoise_{}.blend".format(
+    filepath="prj/{}_x_{}_y_{}_z_{}_rx_{}_ry_{}_rz_{}_lens_{}_dof_{}_dist_{}_fstop_{}_samp_{}_denoise_{}.blend".format(
         paper,
-        sun_intensity,
-        sun_rotation,
         x,
         y,
         z,
