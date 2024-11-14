@@ -62,7 +62,7 @@ for i, img in enumerate(images):
 
     # Create a bump node
     bump_node = nodes.new(type="ShaderNodeBump")
-    bump_node.inputs["Strength"].default_value = 0.05
+    bump_node.inputs["Strength"].default_value = 0.1
 
     # Link the texture node to the bump node
     links.new(texture_node.outputs["Fac"], bump_node.inputs["Height"])
@@ -117,7 +117,7 @@ background_plane.name = "BackgroundPlane"
 # Add a soft white light at (5, 5, 5)
 bpy.ops.object.light_add(type="SPOT", location=(-5, 5, 5))
 light = bpy.context.object
-light.data.energy = 1500
+light.data.energy = 2000
 light.data.color = (0.956, 0.839, 0.761)
 light.data.spot_size = math.radians(45)
 light.data.spot_blend = 0.15
