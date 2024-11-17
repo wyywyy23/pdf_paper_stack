@@ -117,9 +117,9 @@ background_plane.name = "BackgroundPlane"
 # Add a soft white light at (5, 5, 5)
 bpy.ops.object.light_add(type="SPOT", location=(-5, 7, 3))
 light = bpy.context.object
-light.data.energy = 3000
+light.data.energy = 5000
 light.data.color = (0.956, 0.839, 0.761)
-light.data.spot_size = math.radians(10)
+light.data.spot_size = math.radians(8)
 light.data.spot_blend = 1
 light.rotation_euler[0] = math.radians(-40)
 light.rotation_euler[1] = math.radians(-59)
