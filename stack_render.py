@@ -4,7 +4,7 @@ import random
 
 import bpy
 
-paper = "ofc23"
+paper = "spie23"
 
 # Set random seed for reproducibility
 random.seed(2441622110)
@@ -115,15 +115,15 @@ background_plane.name = "BackgroundPlane"
 # asset_base_id:752306e7-fb72-4a84-89a1-3be404dcdc38 asset_type:material
 
 # Add a soft white light at (5, 5, 5)
-bpy.ops.object.light_add(type="SPOT", location=(-5, 5, 5))
+bpy.ops.object.light_add(type="SPOT", location=(-5, 7, 3))
 light = bpy.context.object
-light.data.energy = 2000
+light.data.energy = 3000
 light.data.color = (0.956, 0.839, 0.761)
-light.data.spot_size = math.radians(45)
-light.data.spot_blend = 0.15
-light.rotation_euler[0] = math.radians(-34)
-light.rotation_euler[1] = math.radians(-37)
-light.rotation_euler[2] = math.radians(15)
+light.data.spot_size = math.radians(10)
+light.data.spot_blend = 1
+light.rotation_euler[0] = math.radians(-40)
+light.rotation_euler[1] = math.radians(-59)
+light.rotation_euler[2] = math.radians(0)
 
 # Add camera
 bpy.ops.object.camera_add()
