@@ -7,7 +7,25 @@ import bpy
 paper = "spie23"
 
 # Set random seed for reproducibility
-random.seed(2441622110)
+seed_list = [
+    22110,
+    220110,
+    2022110,
+    20220110,
+    24416,
+    240416,
+    2024416,
+    20240416,
+    2211024416,
+    220110240416,
+    20221102024416,
+    2022011020240416,
+    2441622110,
+    240416220110,
+    20244162022110,
+    2024041620220110,
+]
+random.seed(random.choice(seed_list))
 
 # Delete every thing in the startup scene
 bpy.ops.object.select_all(action="SELECT")
@@ -110,9 +128,6 @@ for i, img in enumerate(images):
 bpy.ops.mesh.primitive_plane_add(size=10, location=(0, 0, z_position - z_offset))
 background_plane = bpy.context.object
 background_plane.name = "BackgroundPlane"
-
-# Add wood manually
-# asset_base_id:752306e7-fb72-4a84-89a1-3be404dcdc38 asset_type:material
 
 # Add a soft white light at (5, 5, 5)
 bpy.ops.object.light_add(type="SPOT", location=(-5, 7, 3))
