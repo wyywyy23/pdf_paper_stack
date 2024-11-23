@@ -74,9 +74,9 @@ for i, img in enumerate(images):
 
     # Create a new texture node
     texture_node = nodes.new(type="ShaderNodeTexNoise")
-    texture_node.inputs["Scale"].default_value = 500
+    texture_node.inputs["Scale"].default_value = 1000
     texture_node.inputs["Detail"].default_value = 250
-    texture_node.inputs["Roughness"].default_value = 0.5
+    texture_node.inputs["Roughness"].default_value = 0.2
 
     # Create a bump node
     bump_node = nodes.new(type="ShaderNodeBump")
