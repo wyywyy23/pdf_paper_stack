@@ -4,7 +4,7 @@ import random
 
 import bpy
 
-paper = "spie23"
+paper = "ofc25"
 
 # Set random seed for reproducibility
 seed_list = [
