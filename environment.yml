@@ -1,0 +1,12 @@
+name: pdf-paper-stack
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - git
+  - make
+  - poppler
+  - pdf2image
+  - pillow
+  - pyyaml

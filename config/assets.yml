@@ -1,0 +1,52 @@
+assets:
+  wood:
+    kind: material
+    datablock: Wood
+    local_paths:
+      - prj/assets/materials/wood_7539d587-e371-4bfb-a35e-2dd3ed1f0e4a/wood_2K_dab39e14-0b08-4721-88f6-284c0cdd29c6.blend
+    cache_globs:
+      - ~/blenderkit_data/materials/wood_*/*.blend
+      - prj/assets/materials/wood_*/*.blend
+    blendkit:
+      asset_base_id: 752306e7-fb72-4a84-89a1-3be404dcdc38
+      asset_type: material
+
+  fountain_pen:
+    kind: collection
+    datablock: Fountain Pen
+    root_object: Fountain Pen
+    local_paths:
+      - prj/assets/models/fountain-pen_2c291735-3c63-4aac-b812-42d2b7f78408/fountain-pen_2K_7c9d815f-ab0c-45e7-84d6-01fbff88767a.blend
+    cache_globs:
+      - ~/blenderkit_data/models/fountain-pen_*/*.blend
+      - prj/assets/models/fountain-pen_*/*.blend
+    transform:
+      location: [0.2, 2.0, 0.0]
+      rotation_degrees: [0.0, 0.0, 270.0]
+      scale: [-0.08, -0.08, -0.08]
+    jitter:
+      location_sigma: [0.02, 0.02, 0.0]
+      rotation_degrees_sigma: [0.0, 0.0, 5.0]
+    blendkit:
+      asset_base_id: 8328e08e-3773-4b25-bf10-8380d9131cca
+      asset_type: model
+
+  paper_clip:
+    kind: collection
+    datablock: Paper clip
+    root_object: Paper clip
+    local_paths:
+      - prj/assets/models/paper-clip_23a9848d-fdf5-4902-bcbf-b151695ef189/paper-clip_6a831ddd-9c8a-4578-a4af-b5a5805009d1.blend
+    cache_globs:
+      - ~/blenderkit_data/models/paper-clip_*/*.blend
+      - prj/assets/models/paper-clip_*/*.blend
+    transform:
+      location: [-0.5, 2.6, -0.002]
+      rotation_degrees: [0.0, 0.0, 200.0]
+      scale: [0.006, 0.006, 0.006]
+    jitter:
+      location_sigma: [0.02, 0.02, 0.0]
+      rotation_degrees_sigma: [0.0, 0.0, 5.0]
+    blendkit:
+      asset_base_id: 901330d6-d5e1-468d-8365-d5707590a274
+      asset_type: model

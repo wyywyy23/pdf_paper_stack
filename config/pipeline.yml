@@ -1,0 +1,137 @@
+default_paper: ofc25
+
+papers:
+  ofc25:
+    pdf: pdf/wangOFC25.pdf
+    images: img/ofc25
+    blend: prj/ofc25.blend
+    render: render/ofc25.png
+  cicc24:
+    pdf: pdf/Wang et al_2024_Silicon Photonics Chip I-O for Ultra High-Bandwidth and Energy-Efficient.pdf
+    images: img/cicc24
+    blend: prj/cicc24.blend
+    render: render/cicc24.png
+  ofc23:
+    pdf: pdf/Wang et al_2023_Dispersion-Engineered and Fabrication-Robust SOI Waveguides for Ultra-Broadband.pdf
+    images: img/ofc23
+    blend: prj/ofc23.blend
+    render: render/ofc23.png
+  spie23:
+    pdf: pdf/Wang et al_2023_Scalable architecture for sub-pJ-b multi-Tbps comb-driven DWDM silicon photonic.pdf
+    images: img/spie23
+    blend: prj/spie23.blend
+    render: render/spie23.png
+  t-cpmt24:
+    pdf: pdf/Wang et al. - 2024 - Co-Designed Silicon Photonics Chip IO for Energy-Efficient Petascale Connectivity.pdf
+    images: img/t-cpmt24
+    blend: prj/t-cpmt24.blend
+    render: render/t-cpmt24.png
+
+preprocess:
+  dpi: 600
+  image_format: JPEG
+  extension: jpg
+
+random:
+  stack_seed: 2211024416
+  asset_seed: 22110
+  seeds:
+    - 22110
+    - 220110
+    - 2022110
+    - 20220110
+    - 24416
+    - 240416
+    - 2024416
+    - 20240416
+    - 2211024416
+    - 220110240416
+    - 20221102024416
+    - 2022011020240416
+    - 2441622110
+    - 240416220110
+    - 20244162022110
+    - 2024041620220110
+
+scene:
+  render:
+    engine: CYCLES
+    device: GPU
+    samples: 1024
+    denoise: false
+    film_transparent: true
+    resolution: [1920, 1080]
+    view_transform: Filmic
+    look: Very High Contrast
+
+  stack:
+    z_offset: 0.0005
+    y_offset_factor: 2.0
+    degree_rotate_max: 1.5
+    rotation_sign: -1
+    spread_reference_pages: 8
+    page_center_rotation_sigma: 1.0
+    fan_rotation_sigma: 0.2
+    material:
+      roughness: 1.0
+      specular: 0.0
+      transmission: 0.1
+      bump:
+        enabled: true
+        scale: 1000
+        detail: 250
+        roughness: 0.2
+        strength: 0.1
+      macro_bump:
+        enabled: true
+        scale: 1.5
+        detail: 0.5
+        roughness: 0.5
+        strength: 0.5
+
+  background:
+    name: BackgroundPlane
+    size: 10
+    z_gap: 0.0005
+    material_asset: wood
+    uv_map:
+      name: automap
+      active: true
+      active_render: true
+      coordinates:
+        - [-2.0, -2.0]
+        - [3.0, -2.0]
+        - [3.0, 3.0]
+        - [-2.0, 3.0]
+
+  lights:
+    - name: KeySpot
+      type: SPOT
+      location: [-5, 7, 3]
+      rotation_degrees: [-40, -59, 0]
+      energy: 5000
+      color: [0.956, 0.839, 0.761]
+      spot_size_degrees: 8
+      spot_blend: 1
+    - name: SoftSun
+      enabled: false
+      type: SUN
+      rotation_degrees: [35, 0, -35]
+      energy: 1.0
+      color: [1.0, 0.95, 0.9]
+
+  camera:
+    name: Camera
+    location: [-0.45, 0.65, 1.6]
+    rotation_degrees: [45, 0, -10]
+    lens: 85
+    dof:
+      enabled: true
+      focus_distance: 2.38
+      fstop: 1.8
+
+  assets:
+    load:
+      - wood
+      - fountain_pen
+      - paper_clip
