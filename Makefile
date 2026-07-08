@@ -3,6 +3,7 @@ BLENDER ?= blender
 
 PAPER ?= ofc25
 VARIANT ?=
+RANDOM_VARIANT ?=
 PIPELINE ?= config/pipeline.yml
 PDF ?=
 IMAGE_DIR ?=
@@ -13,10 +14,18 @@ ASSETS ?= config/assets.yml
 ASSETS_SMOKE_BLEND ?= /private/tmp/pdf_paper_stack_assets_smoke.blend
 
 ifneq ($(strip $(VARIANT)),)
+ifneq ($(strip $(RANDOM_VARIANT)),)
+$(error Use either VARIANT or RANDOM_VARIANT, not both)
+endif
 VARIANT_ARGS := --variant "$(VARIANT)"
 DEFAULT_BLEND := $(PROJECT_DIR)/variants/$(PAPER)_v$(VARIANT).blend
 DEFAULT_RENDER_OUTPUT := $(RENDER_DIR)/variants/$(PAPER)_v$(VARIANT)_\#\#\#\#
 DEFAULT_SCENE_JSON := build/variants/$(PAPER)_v$(VARIANT).scene.json
+else ifneq ($(strip $(RANDOM_VARIANT)),)
+VARIANT_ARGS := --random-variant
+DEFAULT_BLEND := $(PROJECT_DIR)/variants/$(PAPER)_random.blend
+DEFAULT_RENDER_OUTPUT := $(RENDER_DIR)/variants/$(PAPER)_random_\#\#\#\#
+DEFAULT_SCENE_JSON := build/variants/$(PAPER)_random.scene.json
 else
 VARIANT_ARGS :=
 DEFAULT_BLEND := $(PROJECT_DIR)/$(PAPER).blend
@@ -28,6 +37,10 @@ BLEND ?= $(DEFAULT_BLEND)
 RENDER_OUTPUT ?= $(DEFAULT_RENDER_OUTPUT)
 ASSETS_JSON ?= build/assets.json
 SCENE_JSON ?= $(DEFAULT_SCENE_JSON)
+RANDOM_SCENE_FORCE :=
+ifneq ($(strip $(RANDOM_VARIANT)),)
+RANDOM_SCENE_FORCE := force-random-scene
+endif
 
 PREPROCESS_ARGS := --paper "$(PAPER)"
 ifneq ($(strip $(PDF)),)
@@ -43,7 +56,7 @@ endif
 	preprocess \
 	assets-json assets-check assets-smoke assets-check-blendkit assets-smoke-blendkit \
 	scene-json build-scene build-scene-blendkit workflow \
-	render blender-info check-tools
+	render blender-info check-tools force-random-scene
 
 help:
 	@printf "PDF Paper Stack workflow\n"
@@ -59,6 +72,7 @@ help:
 	@printf "  make scene-json       Materialize per-paper Blender JSON config\n"
 	@printf "  make build-scene      Build prj/<paper>.blend from page images and assets\n"
 	@printf "  make build-scene VARIANT=3 Build deterministic variant in prj/variants/\n"
+	@printf "  make build-scene RANDOM_VARIANT=1 Build seed-pool random variant in prj/variants/\n"
 	@printf "  make workflow         Run preprocess and build-scene\n"
 	@printf "  make assets-check     Resolve local/cached assets from config/assets.yml\n"
 	@printf "  make assets-smoke     Append resolved assets into a temporary .blend\n"
@@ -68,6 +82,7 @@ help:
 	@printf "Variables:\n"
 	@printf "  PAPER=%s\n" "$(PAPER)"
 	@printf "  VARIANT=%s\n" "$(VARIANT)"
+	@printf "  RANDOM_VARIANT=%s\n" "$(RANDOM_VARIANT)"
 	@printf "  PIPELINE=%s\n" "$(PIPELINE)"
 	@printf "  PDF=%s\n" "$(PDF)"
 	@printf "  ASSETS=%s\n" "$(ASSETS)"
@@ -119,7 +134,9 @@ assets-check-blendkit: check-tools $(ASSETS_JSON)
 assets-smoke-blendkit: check-tools $(ASSETS_JSON)
 	$(BLENDER) --background --python scripts/blender_assets.py -- --manifest-json "$(ASSETS_JSON)" --action append-smoke --allow-blendkit-fallback --output-blend "$(ASSETS_SMOKE_BLEND)"
 
-$(SCENE_JSON): $(PIPELINE) $(ASSETS) scripts/paper_stack.py
+force-random-scene:
+
+$(SCENE_JSON): $(PIPELINE) $(ASSETS) scripts/paper_stack.py $(RANDOM_SCENE_FORCE)
 	@mkdir -p "$(dir $(SCENE_JSON))"
 	conda run -n $(ENV_NAME) python scripts/paper_stack.py --config "$(PIPELINE)" --assets "$(ASSETS)" scene-json --paper "$(PAPER)" --output "$(SCENE_JSON)" --output-blend "$(BLEND)" $(VARIANT_ARGS)
 

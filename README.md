@@ -38,6 +38,19 @@ Numeric variants use the `random.seeds` pool in `config/pipeline.yml` and then
 derive separate paper-stack and asset-jitter streams, so the pages, pen, and
 paper clip move independently but reproducibly.
 
+Build a seed-pool random layout variant:
+
+```sh
+make build-scene PAPER=ofc25 RANDOM_VARIANT=1
+make render PAPER=ofc25 RANDOM_VARIANT=1
+```
+
+Random variant builds save to `prj/variants/<paper>_random.blend` by default.
+Each scene JSON generation randomly picks stack and asset seeds from
+`random.seeds`, records the selected seed indices in
+`build/variants/<paper>_random.scene.json`, and overwrites that random variant
+unless you pass custom `SCENE_JSON` or `BLEND` paths.
+
 Resolve local assets before rendering:
 
 ```sh

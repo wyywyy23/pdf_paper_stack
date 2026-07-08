@@ -4,6 +4,7 @@ import argparse
 import copy
 import hashlib
 import json
+import secrets
 from pathlib import Path
 
 from pdf2image import convert_from_path
@@ -98,26 +99,60 @@ def variant_source_seed(random_config: dict, variant: str) -> tuple[int, dict]:
     return source_seed, {"seed_source": "derived"}
 
 
+def random_seed_pair(random_config: dict) -> tuple[int, int, dict]:
+    seeds = [int(seed) for seed in random_config.get("seeds") or []]
+    if not seeds:
+        raise ValueError("Random variant mode requires at least one configured random.seeds entry.")
+
+    stack_seed_index = secrets.randbelow(len(seeds))
+    asset_seed_index = secrets.randbelow(len(seeds))
+    stack_seed = seeds[stack_seed_index]
+    asset_seed = seeds[asset_seed_index]
+    return stack_seed, asset_seed, {
+        "seed_source": "random.seeds",
+        "stack_seed_index": stack_seed_index,
+        "asset_seed_index": asset_seed_index,
+        "seed_count": len(seeds),
+    }
+
+
 def random_config_for_variant(
     random_config: dict,
     variant: str | None,
+    random_variant: bool = False,
 ) -> tuple[dict, dict | None]:
     config = copy.deepcopy(random_config)
-    if variant is None:
+    if variant is not None and random_variant:
+        raise ValueError("Use either --variant or --random-variant, not both.")
+    if variant is None and not random_variant:
         return config, None
 
-    source_seed, metadata = variant_source_seed(config, variant)
     base_stack_seed = config.get("stack_seed")
     base_asset_seed = config.get("asset_seed")
-
     config["base_stack_seed"] = base_stack_seed
     config["base_asset_seed"] = base_asset_seed
+
+    if random_variant:
+        stack_seed, asset_seed, metadata = random_seed_pair(config)
+        config["stack_seed"] = stack_seed
+        config["asset_seed"] = asset_seed
+        variant_metadata = {
+            "id": "random",
+            "mode": "random",
+            "stack_seed": stack_seed,
+            "asset_seed": asset_seed,
+            **metadata,
+        }
+        return config, variant_metadata
+
+    source_seed, metadata = variant_source_seed(config, variant)
     config["variant_source_seed"] = source_seed
     config["stack_seed"] = stable_seed(source_seed, variant, "stack")
     config["asset_seed"] = stable_seed(source_seed, variant, "assets")
 
     variant_metadata = {
         "id": variant,
+        "mode": "deterministic",
         "source_seed": source_seed,
         "stack_seed": config["stack_seed"],
         "asset_seed": config["asset_seed"],
@@ -167,10 +202,13 @@ def write_scene_json(args: argparse.Namespace) -> int:
     random_config, variant_metadata = random_config_for_variant(
         config.get("random", {}),
         args.variant,
+        args.random_variant,
     )
     output_blend = args.output_blend
     if output_blend is None and args.variant is not None:
         output_blend = f"prj/variants/{paper_id}_v{args.variant}.blend"
+    elif output_blend is None and args.random_variant:
+        output_blend = f"prj/variants/{paper_id}_random.blend"
 
     scene_data = {
         "project_root": str(ROOT),
@@ -214,7 +252,9 @@ def build_parser() -> argparse.ArgumentParser:
     scene_json.add_argument("--paper", default=None)
     scene_json.add_argument("--output", default=None)
     scene_json.add_argument("--output-blend", default=None)
-    scene_json.add_argument("--variant", default=None)
+    variant_group = scene_json.add_mutually_exclusive_group()
+    variant_group.add_argument("--variant", default=None)
+    variant_group.add_argument("--random-variant", action="store_true")
 
     return parser
 
@@ -228,8 +268,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "scene-json":
         if args.output is None:
             paper_id, _ = selected_paper(load_pipeline(resolve_path(args.config)), args.paper)
-            if args.variant is None:
+            if args.variant is None and not args.random_variant:
                 args.output = f"build/{paper_id}.scene.json"
+            elif args.random_variant:
+                args.output = f"build/variants/{paper_id}_random.scene.json"
             else:
                 args.output = f"build/variants/{paper_id}_v{args.variant}.scene.json"
         return write_scene_json(args)
