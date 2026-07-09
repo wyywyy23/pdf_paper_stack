@@ -41,7 +41,9 @@ assets:
       - ~/blenderkit_data/models/paper-clip_*/*.blend
       - prj/assets/models/paper-clip_*/*.blend
     transform:
-      location: [-0.5, 2.6, -0.002]
+      location: [-0.5, 2.6, 0.0]
+      z_reference: table
+      z_align: bottom
       rotation_degrees: [0.0, 0.0, 200.0]
       scale: [0.006, 0.006, 0.006]
     jitter:

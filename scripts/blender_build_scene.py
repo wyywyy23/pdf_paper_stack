@@ -215,6 +215,7 @@ def load_configured_assets(
     asset_keys: list[str],
     allow_blendkit_fallback: bool,
     rng: random.Random,
+    transform_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     loaded = {}
     for key in asset_keys:
@@ -223,7 +224,13 @@ def load_configured_assets(
             project_root, key, asset, allow_blendkit_fallback
         )
         if local_path:
-            loaded[key] = blender_assets.append_local_asset(key, asset, local_path, rng=rng)
+            loaded[key] = blender_assets.append_local_asset(
+                key,
+                asset,
+                local_path,
+                rng=rng,
+                transform_context=transform_context,
+            )
         elif allow_blendkit_fallback:
             loaded[key] = blender_assets.blenderkit_fallback(key, asset)
     return loaded
@@ -340,6 +347,15 @@ def build_scene(args: argparse.Namespace) -> None:
     configure_render(scene_config.get("render", {}))
 
     z_position = build_stack(Path(paper["images"]), scene_config.get("stack", {}), stack_rng)
+    background_config = scene_config.get("background", {})
+    table_z = z_position - background_config.get("z_gap", 0.0005)
+    transform_context = {
+        "z_references": {
+            "stack_top": 0.0,
+            "table": table_z,
+            "background": table_z,
+        }
+    }
     asset_keys = scene_config.get("assets", {}).get("load", [])
     loaded_assets = load_configured_assets(
         project_root,
@@ -347,8 +363,9 @@ def build_scene(args: argparse.Namespace) -> None:
         asset_keys,
         args.allow_blendkit_fallback,
         asset_rng,
+        transform_context,
     )
-    add_background(z_position, scene_config.get("background", {}), loaded_assets)
+    add_background(z_position, background_config, loaded_assets)
     add_lights(scene_config.get("lights", []))
     add_camera(scene_config.get("camera", {}))
 

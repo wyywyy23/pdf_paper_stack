@@ -26,6 +26,11 @@ papers:
     images: img/t-cpmt25
     blend: prj/t-cpmt25.blend
     render: render/t-cpmt25.png
+  cpo-chapter:
+    pdf: pdf/cpo_chapter_draft.pdf
+    images: img/cpo-chapter
+    blend: prj/cpo-chapter.blend
+    render: render/cpo-chapter.png
 
 preprocess:
   dpi: 600

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import bpy
+import mathutils
 
 
 def parse_args() -> argparse.Namespace:
@@ -106,6 +107,31 @@ def jittered_transform(transform: dict, jitter: dict, rng: random.Random | None)
     return updated
 
 
+def resolve_z_reference(
+    transform: dict,
+    transform_context: dict | None,
+) -> tuple[dict, float | None]:
+    if "z_reference" not in transform or "location" not in transform:
+        return transform, None
+
+    z_reference = transform["z_reference"]
+    z_references = (transform_context or {}).get("z_references", {})
+    if z_reference in z_references:
+        reference_z = z_references[z_reference]
+    elif not z_references:
+        reference_z = 0.0
+    else:
+        choices = ", ".join(sorted(z_references))
+        raise ValueError(f"Unknown z_reference {z_reference!r}. Available: {choices}")
+
+    updated = dict(transform)
+    location = list(transform["location"])
+    target_z = reference_z + location[2]
+    location[2] = target_z
+    updated["location"] = location
+    return updated, target_z
+
+
 def set_transform(obj, transform: dict) -> None:
     if not obj or not transform:
         return
@@ -117,11 +143,56 @@ def set_transform(obj, transform: dict) -> None:
         obj.scale = transform["scale"]
 
 
+def object_world_z_bounds(obj) -> tuple[float, float] | None:
+    if obj.type == "EMPTY" or not hasattr(obj, "bound_box"):
+        return None
+
+    points = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+    if not points:
+        return None
+    return min(point.z for point in points), max(point.z for point in points)
+
+
+def collection_world_z_bounds(collection) -> tuple[float, float] | None:
+    bpy.context.view_layer.update()
+    bounds = [
+        bound
+        for obj in collection.all_objects
+        if (bound := object_world_z_bounds(obj)) is not None
+    ]
+    if not bounds:
+        return None
+    return min(bound[0] for bound in bounds), max(bound[1] for bound in bounds)
+
+
+def align_collection_z(collection, root_object, align: str, target_z: float) -> None:
+    if align == "origin":
+        current_z = root_object.location.z
+    else:
+        bounds = collection_world_z_bounds(collection)
+        if bounds is None:
+            raise RuntimeError(f"Cannot align {collection.name!r}; no bounded objects found")
+
+        min_z, max_z = bounds
+        if align == "bottom":
+            current_z = min_z
+        elif align == "top":
+            current_z = max_z
+        elif align == "center":
+            current_z = (min_z + max_z) / 2.0
+        else:
+            raise ValueError(f"Unsupported z_align {align!r}")
+
+    root_object.location.z += target_z - current_z
+    bpy.context.view_layer.update()
+
+
 def append_local_asset(
     asset_key: str,
     asset: dict,
     file_path: Path,
     rng: random.Random | None = None,
+    transform_context: dict | None = None,
 ):
     kind = asset["kind"]
     datablock = asset["datablock"]
@@ -137,7 +208,15 @@ def append_local_asset(
         root_name = asset.get("root_object")
         root_object = bpy.data.objects.get(root_name) if root_name else None
         transform = jittered_transform(asset.get("transform", {}), asset.get("jitter", {}), rng)
+        transform, target_z = resolve_z_reference(transform, transform_context)
         set_transform(root_object, transform)
+        if root_object and "z_align" in transform:
+            align_collection_z(
+                collection,
+                root_object,
+                transform["z_align"],
+                target_z if target_z is not None else root_object.location.z,
+            )
         print(f"{asset_key}: loaded collection {collection.name} from {file_path}")
         return collection
 
