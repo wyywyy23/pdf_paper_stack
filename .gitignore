@@ -168,4 +168,13 @@ cython_debug/
 *.blend1
 !prj/assets/**/*.blend
 prj/variants/
-render/variants/
+
+# User-supplied papers and generated paper images
+pdf/*.pdf
+!pdf/Wang et al. - 2025 - Co-Designed Silicon Photonics Chip IO for Energy-Efficient Petascale Connectivity.pdf
+img/*/page_*.jpg
+img/*/page_*.jpeg
+img/*/page_*.png
+
+# Render outputs are regenerated locally; keep img/example.png for README display.
+render/
