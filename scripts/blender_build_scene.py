@@ -89,6 +89,8 @@ def add_noise_bump(material: Any, bump_config: dict[str, Any], bsdf: Any) -> Any
 
     bump = nodes.new(type="ShaderNodeBump")
     bump.inputs["Strength"].default_value = bump_config.get("strength", 0.1)
+    bump.inputs["Distance"].default_value = bump_config.get("distance", 1.0)
+    bump.inputs["Filter Width"].default_value = bump_config.get("filter_width", 1.0)
     links.new(noise.outputs["Fac"], bump.inputs["Height"])
     return bump
 
@@ -99,6 +101,8 @@ def configure_page_material(obj: Any, material_config: dict[str, Any]) -> None:
 
     material = obj.data.materials[0]
     material.use_nodes = True
+    if "blend_method" in material_config:
+        material.blend_method = material_config["blend_method"]
     bsdf = material.node_tree.nodes.get("Principled BSDF")
     if bsdf is None:
         return
@@ -120,11 +124,13 @@ def configure_page_material(obj: Any, material_config: dict[str, Any]) -> None:
     links = material.node_tree.links
 
     if bump and macro_bump:
-        vector_add = material.node_tree.nodes.new(type="ShaderNodeVectorMath")
-        vector_add.operation = "ADD"
-        links.new(bump.outputs["Normal"], vector_add.inputs[0])
-        links.new(macro_bump.outputs["Normal"], vector_add.inputs[1])
-        links.new(vector_add.outputs["Vector"], bsdf.inputs["Normal"])
+        # Color add matches the original hand-tuned paper grain from the wood branch.
+        combine_bump = material.node_tree.nodes.new(type="ShaderNodeMixRGB")
+        combine_bump.blend_type = "ADD"
+        combine_bump.inputs["Fac"].default_value = 1.0
+        links.new(bump.outputs["Normal"], combine_bump.inputs[1])
+        links.new(macro_bump.outputs["Normal"], combine_bump.inputs[2])
+        links.new(combine_bump.outputs["Color"], bsdf.inputs["Normal"])
     elif bump:
         links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     elif macro_bump:

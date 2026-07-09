@@ -1,7 +1,18 @@
 ENV_NAME := pdf-paper-stack
 BLENDER ?= blender
 
-PAPER ?= ofc25
+PAPER_ID ?=
+PAPER ?=
+ifneq ($(strip $(PAPER_ID)),)
+ifneq ($(strip $(PAPER)),)
+ifneq ($(strip $(PAPER_ID)),$(strip $(PAPER)))
+$(error Use either PAPER_ID or PAPER, not both)
+endif
+endif
+override PAPER := $(PAPER_ID)
+else ifeq ($(strip $(PAPER)),)
+override PAPER := ofc25
+endif
 VARIANT ?=
 RANDOM_VARIANT ?=
 PIPELINE ?= config/pipeline.yml
@@ -12,6 +23,9 @@ RENDER_DIR ?= render
 RENDER_FRAME ?= 1
 ASSETS ?= config/assets.yml
 ASSETS_SMOKE_BLEND ?= /private/tmp/pdf_paper_stack_assets_smoke.blend
+BLEND_ORIGIN := $(origin BLEND)
+RENDER_OUTPUT_ORIGIN := $(origin RENDER_OUTPUT)
+RENDER_AUTO_VARIANT ?= 1
 
 ifneq ($(strip $(VARIANT)),)
 ifneq ($(strip $(RANDOM_VARIANT)),)
@@ -55,7 +69,7 @@ endif
 	env env-update env-remove env-info \
 	preprocess \
 	assets-json assets-check assets-smoke assets-check-blendkit assets-smoke-blendkit \
-	scene-json build-scene build-scene-blendkit workflow \
+	scene-json build-scene build-scene-blendkit workflow preprocess-build \
 	render blender-info check-tools force-random-scene
 
 help:
@@ -71,18 +85,21 @@ help:
 	@printf "  make preprocess       Convert the configured PDF to img/<paper>/page_N.jpg\n"
 	@printf "  make scene-json       Materialize per-paper Blender JSON config\n"
 	@printf "  make build-scene      Build prj/<paper>.blend from page images and assets\n"
+	@printf "  make workflow         Run preprocess, then build-scene\n"
+	@printf "  make preprocess-build Alias for workflow\n"
 	@printf "  make build-scene VARIANT=3 Build deterministic variant in prj/variants/\n"
 	@printf "  make build-scene RANDOM_VARIANT=1 Build seed-pool random variant in prj/variants/\n"
-	@printf "  make workflow         Run preprocess and build-scene\n"
 	@printf "  make assets-check     Resolve local/cached assets from config/assets.yml\n"
 	@printf "  make assets-smoke     Append resolved assets into a temporary .blend\n"
 	@printf "  make assets-*-blendkit Same asset checks, with BlendKit ID fallback enabled\n"
-	@printf "  make render           Render an existing .blend to render/<paper>_0001.png\n"
+	@printf "  make render           Render latest variant .blend, or base .blend if no variant exists\n"
 	@printf "\n"
 	@printf "Variables:\n"
 	@printf "  PAPER=%s\n" "$(PAPER)"
+	@printf "  PAPER_ID=%s (alias for PAPER)\n" "$(PAPER)"
 	@printf "  VARIANT=%s\n" "$(VARIANT)"
 	@printf "  RANDOM_VARIANT=%s\n" "$(RANDOM_VARIANT)"
+	@printf "  RENDER_AUTO_VARIANT=%s\n" "$(RENDER_AUTO_VARIANT)"
 	@printf "  PIPELINE=%s\n" "$(PIPELINE)"
 	@printf "  PDF=%s\n" "$(PDF)"
 	@printf "  ASSETS=%s\n" "$(ASSETS)"
@@ -92,8 +109,12 @@ help:
 	@printf "\n"
 	@printf "Examples:\n"
 	@printf "  make env\n"
-	@printf "  make preprocess PAPER=ofc25 PDF=pdf/wangOFC25.pdf\n"
-	@printf "  make render PAPER=cicc24\n"
+	@printf "  make preprocess PAPER_ID=ofc25 PDF=pdf/wangOFC25.pdf\n"
+	@printf "  make workflow PAPER_ID=ofc25 VARIANT=3\n"
+	@printf "  make workflow PAPER_ID=ofc25 RANDOM_VARIANT=1\n"
+	@printf "  make render PAPER_ID=ofc25\n"
+	@printf "  make render PAPER_ID=ofc25 RANDOM_VARIANT=1\n"
+	@printf "  make render PAPER_ID=ofc25 RENDER_AUTO_VARIANT=0\n"
 
 env:
 	conda env create -f environment.yml || conda env update -f environment.yml --prune
@@ -150,13 +171,30 @@ build-scene-blendkit: check-tools $(SCENE_JSON)
 	@mkdir -p "$(dir $(BLEND))"
 	$(BLENDER) --background --python scripts/blender_build_scene.py -- --scene-json "$(SCENE_JSON)" --output "$(BLEND)" --allow-blendkit-fallback
 
-workflow: preprocess build-scene
+workflow:
+	$(MAKE) preprocess
+	$(MAKE) build-scene
+
+preprocess-build: workflow
 
 render: check-tools
-	@test -f "$(BLEND)" || (printf "Blend file not found: %s\nRun make build-scene PAPER=%s first.\n" "$(BLEND)" "$(PAPER)"; exit 1)
-	@mkdir -p "$(dir $(RENDER_OUTPUT))"
-	$(BLENDER) --background "$(BLEND)" --render-output "$(abspath $(RENDER_OUTPUT))" --render-format PNG --render-frame $(RENDER_FRAME)
-	@printf "Rendered frame %s with output prefix %s\n" "$(RENDER_FRAME)" "$(RENDER_OUTPUT)"
+	@blend="$(BLEND)"; \
+	output="$(RENDER_OUTPUT)"; \
+	if [ "$(RENDER_AUTO_VARIANT)" = "1" ] && [ -z "$(strip $(VARIANT))" ] && [ -z "$(strip $(RANDOM_VARIANT))" ] && [ "$(BLEND_ORIGIN)" = "undefined" ]; then \
+		latest=$$(ls -t "$(PROJECT_DIR)"/variants/"$(PAPER)"_*.blend 2>/dev/null | head -n 1); \
+		if [ -n "$$latest" ]; then \
+			blend="$$latest"; \
+			if [ "$(RENDER_OUTPUT_ORIGIN)" = "undefined" ]; then \
+				stem=$$(basename "$$latest" .blend); \
+				output="$(RENDER_DIR)/variants/$${stem}_####"; \
+			fi; \
+		fi; \
+	fi; \
+	test -f "$$blend" || (printf "Blend file not found: %s\nRun make build-scene PAPER=%s first.\n" "$$blend" "$(PAPER)"; exit 1); \
+	mkdir -p "$$(dirname "$$output")"; \
+	printf "Rendering %s to %s\n" "$$blend" "$$output"; \
+	$(BLENDER) --background "$$blend" --render-output "$$(cd "$$(dirname "$$output")" && pwd)/$$(basename "$$output")" --render-format PNG --render-frame $(RENDER_FRAME); \
+	printf "Rendered frame %s with output prefix %s\n" "$(RENDER_FRAME)" "$$output"
 
 blender-info:
 	$(BLENDER) --background --version

@@ -2,7 +2,7 @@ default_paper: ofc25
 
 papers:
   ofc25:
-    pdf: pdf/wangOFC25.pdf
+    pdf: pdf/Wang et al. - 2025 - Order-Preserving Channel Calibration of Kerr Comb-Driven Microresonator-Based DWDM Link.pdf
     images: img/ofc25
     blend: prj/ofc25.blend
     render: render/ofc25.png
@@ -21,11 +21,11 @@ papers:
     images: img/spie23
     blend: prj/spie23.blend
     render: render/spie23.png
-  t-cpmt24:
-    pdf: pdf/Wang et al. - 2024 - Co-Designed Silicon Photonics Chip IO for Energy-Efficient Petascale Connectivity.pdf
-    images: img/t-cpmt24
-    blend: prj/t-cpmt24.blend
-    render: render/t-cpmt24.png
+  t-cpmt25:
+    pdf: pdf/Wang et al. - 2025 - Co-Designed Silicon Photonics Chip IO for Energy-Efficient Petascale Connectivity.pdf
+    images: img/t-cpmt25
+    blend: prj/t-cpmt25.blend
+    render: render/t-cpmt25.png
 
 preprocess:
   dpi: 600
@@ -73,6 +73,7 @@ scene:
     page_center_rotation_sigma: 1.0
     fan_rotation_sigma: 0.2
     material:
+      blend_method: BLEND
       roughness: 1.0
       specular: 0.0
       transmission: 0.1
@@ -82,12 +83,16 @@ scene:
         detail: 250
         roughness: 0.2
         strength: 0.1
+        distance: 1.0
+        filter_width: 1.0
       macro_bump:
         enabled: true
         scale: 1.5
         detail: 0.5
         roughness: 0.5
         strength: 0.5
+        distance: 1.0
+        filter_width: 1.0
 
   background:
     name: BackgroundPlane
