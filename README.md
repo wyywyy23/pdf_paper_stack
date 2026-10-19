@@ -1,122 +1,81 @@
 # PDF Paper Stack
 
-Generate 3D mockup paper stacks from configured PDF files:
+Turn a PDF into a Blender-rendered paper stack for publication announcements.
+Choose a spread of pages (`fan`) or a compact pile with visible page edges (`stack`).
 
-![example render](img/example.png)
+![Example render](img/example.png)
 
-The checked-in preview image is rendered from the bundled `t-cpmt25` sample
-PDF. Other source PDFs, converted page images, Blender scene files, and render
-outputs are generated or supplied locally and are not committed.
+## Setup
 
-## What You Need To Supply
-
-- Blender, installed separately and available as `blender`, or passed as
-  `BLENDER=/path/to/blender`.
-- The source PDF for any non-sample paper you want to build. Put it at the
-  `pdf` path for that paper in `config/pipeline.yml`, or pass
-  `PDF=/path/to/paper.pdf` when running `make preprocess`.
-- Generated page images under `img/<paper>/page_N.jpg`. These are produced by
-  `make preprocess` from your local PDF and are ignored by Git.
-- Any replacement assets you configure in `config/assets.yml`. The repository
-  keeps the currently configured local assets under `prj/assets/`; if you change
-  those paths, provide your own `.blend` files or use the BlendKit fallback
-  targets.
-
-## Workflow
-
-The default paper is `t-cpmt25`. Select another configured paper with
-`PAPER_ID` or `PAPER`; available IDs are listed in `config/pipeline.yml`.
-
-The default `t-cpmt25` sample PDF is included at:
-
-```text
-pdf/Wang et al. - 2025 - Co-Designed Silicon Photonics Chip IO for Energy-Efficient Petascale Connectivity.pdf
-```
-
-To build a different local copy without editing the config:
-
-```sh
-make preprocess PAPER_ID=t-cpmt25 PDF=/path/to/your-paper.pdf
-```
-
-Create or update the Python environment:
+Install [Blender](https://www.blender.org/download/) and Conda. Blender must be
+available as `blender`; tested with Blender 5.2 LTS. From the repository root:
 
 ```sh
 make env
-make env-update
-```
-
-Build a paper stack scene from the config:
-
-```sh
-make preprocess PAPER_ID=t-cpmt25
-make scene-json PAPER_ID=t-cpmt25
-make build-scene PAPER_ID=t-cpmt25
-```
-
-`make scene-json` writes `build/<paper>.scene.json`, and `make build-scene`
-builds `prj/<paper>.blend`, for example `prj/t-cpmt25.blend`. Camera, render,
-stack, light, background, paper, and asset settings live in
-`config/pipeline.yml` and `config/assets.yml`.
-
-Run preprocessing and scene building in one command:
-
-```sh
-make workflow PAPER_ID=t-cpmt25
-```
-
-Build deterministic layout variants from the configured seed pool:
-
-```sh
-make workflow PAPER_ID=t-cpmt25 VARIANT=3
-make render PAPER_ID=t-cpmt25 VARIANT=3
-```
-
-Variant builds save to `prj/variants/<paper>_v<variant>.blend` by default.
-Numeric variants use the `random.seeds` pool in `config/pipeline.yml` and then
-derive separate paper-stack and asset-jitter streams, so the pages, pen, and
-paper clip move independently but reproducibly.
-
-Build a seed-pool random layout variant:
-
-```sh
-make workflow PAPER_ID=t-cpmt25 RANDOM_VARIANT=1
-make render PAPER_ID=t-cpmt25 RANDOM_VARIANT=1
-```
-
-Random variant builds save to `prj/variants/<paper>_random.blend` by default.
-Each scene JSON generation randomly picks stack and asset seeds from
-`random.seeds`, records the selected seed indices in
-`build/variants/<paper>_random.scene.json`, and overwrites that random variant
-unless you pass custom `SCENE_JSON` or `BLEND` paths.
-
-Render outputs framed PNGs such as `render/t-cpmt25_0001.png`. These outputs
-are ignored by Git. When no explicit `VARIANT`, `RANDOM_VARIANT`, or `BLEND` is
-passed, render defaults to the newest existing `prj/variants/<paper>_*.blend`;
-in that case output goes under `render/variants/`.
-
-```sh
-make render PAPER_ID=t-cpmt25
-```
-
-Force the base `prj/<paper>.blend` render with:
-
-```sh
-make render PAPER_ID=t-cpmt25 RENDER_AUTO_VARIANT=0
-```
-
-Validate local assets before building scenes:
-
-```sh
 make assets-check
-make assets-smoke
 ```
 
-Assets are configured in `config/assets.yml`. The loader checks project-local `.blend`
-files first, then cache globs such as `~/blenderkit_data/...`. BlendKit
-`asset_base_id` values are kept as an explicit fallback:
+The Conda environment includes Python, Poppler and the Python dependencies.
+Local scene assets and one sample PDF are included. Other configured papers are
+examples of local inputs; their PDFs are not bundled.
+
+Use `BLENDER=/path/to/blender` if needed. `PYTHON=/path/to/python` selects an
+existing Python environment instead of Conda.
+
+## Render
+
+Try the bundled sample at preview quality:
 
 ```sh
-make assets-check-blendkit
-make assets-smoke-blendkit
+make publish DPI=150 SAMPLES=64 RESOLUTION=960x540 DENOISE=1
 ```
+
+`publish` builds and renders locally; it does not upload anything. The default
+paper is `t-cpmt25`. Results go to `render/`, with an editable scene in `prj/`.
+
+Use the compact layout, or render at the configured full quality:
+
+```sh
+make publish LAYOUT=stack DPI=150 SAMPLES=64 RESOLUTION=960x540 DENOISE=1
+make publish LAYOUT=stack
+```
+
+The supplied full-quality settings are 600 DPI, 1920×1080 and 1024 samples.
+Compact outputs include `_stack` in their names. The default layout is `fan`.
+
+## Your own PDF
+
+For a one-off render, reuse the sample configuration with separate output paths:
+
+```sh
+make publish PAPER_ID=t-cpmt25 PDF="/path/to/paper.pdf" \
+  IMAGE_DIR=img/my-paper VARIANT=my-paper LAYOUT=stack
+```
+
+For repeated use, add a paper under `papers` in `config/pipeline.yml`:
+
+```yaml
+my-paper:
+  pdf: pdf/my-paper.pdf
+  images: img/my-paper
+  blend: prj/my-paper.blend
+```
+
+Then run `make publish PAPER_ID=my-paper LAYOUT=stack`.
+
+## Adjustments
+
+- `VARIANT=1` or `VARIANT=hero` creates a separate, repeatable composition;
+  `RANDOM_VARIANT=1` draws a new one. Choose one of these modes at a time.
+- `config/pipeline.yml` controls camera, lighting and paper appearance;
+  `config/assets.yml` controls the local assets.
+- In `scene.stack.compact`, adjust `page_thickness`, `outlier_distance` and
+  `edge_curl` for the pile, and `lighting` for illumination. `focus_uv` sets the
+  focus point on the cover: `[0.5, 0.76]` means centered horizontally and 76% up
+  from the bottom. Adjust it to your article's title position.
+- `make workflow` builds without rendering. `make render` refreshes and renders
+  the selected scene. To render a scene you edited in Blender as-is, use
+  `make render BLEND=/path/to/scene.blend`.
+
+Replaced outputs are kept under `history/`. For more command options, run
+`make help`. Run `make test` for the pipeline checks.

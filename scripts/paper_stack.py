@@ -5,6 +5,12 @@ import copy
 import hashlib
 import json
 import secrets
+import os
+import math
+import re
+import shutil
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pdf2image import convert_from_path
@@ -52,17 +58,56 @@ def selected_paper(config: dict, paper_id: str | None) -> tuple[str, dict]:
     if selected not in papers:
         choices = ", ".join(sorted(papers))
         raise ValueError(f"Unknown paper {selected!r}. Available papers: {choices}")
+    if not isinstance(selected, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", selected):
+        raise ValueError("Paper ID must be a safe name")
     paper = papers[selected]
     if not isinstance(paper, dict):
         raise ValueError(f"papers.{selected} must be a mapping")
+    for key in ("pdf", "images", "blend"):
+        if not isinstance(paper.get(key), str) or not paper[key].strip():
+            raise ValueError(f"papers.{selected}.{key} must be a nonempty path")
     return selected, paper
 
 
-def write_json(path: Path, data: dict) -> None:
+def file_hash(path: Path) -> str:
+    with path.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def generated_page(path: Path) -> bool:
+    return bool(re.fullmatch(r"page_[0-9]+\.(?:jpg|jpeg|png)", path.name, re.IGNORECASE))
+
+
+def validate_variant(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
+        raise ValueError("Variant must be a safe number or name")
+    if value.isdigit() and int(value) < 1:
+        raise ValueError("Numeric variants are 1-based")
+    return value
+
+
+def write_json(path: Path, data: dict, preserve: bool = True) -> None:
+    path = Path(path)
+    content = (json.dumps(data, indent=2) + "\n").encode()
+    if path.is_symlink():
+        raise ValueError(f"Refusing symlink output: {path}")
+    if path.is_file() and path.read_bytes() == content:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2)
-        handle.write("\n")
+    if preserve and path.is_file():
+        history = path.parent / "history"
+        history.mkdir(exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        shutil.copy2(path, history / f"{path.stem}_{stamp}{path.suffix}")
+    fd, name = tempfile.mkstemp(prefix=".paper-stack-json-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
 
 
 def stable_seed(*parts: object) -> int:
@@ -127,6 +172,8 @@ def random_config_for_variant(
     if variant is None and not random_variant:
         return config, None
 
+    if variant is not None:
+        validate_variant(variant)
     base_stack_seed = config.get("stack_seed")
     base_asset_seed = config.get("asset_seed")
     config["base_stack_seed"] = base_stack_seed
@@ -179,20 +226,89 @@ def preprocess(args: argparse.Namespace) -> int:
 
     pdf_path = resolve_path(args.pdf or paper["pdf"])
     image_dir = resolve_path(args.images or paper["images"])
-    dpi = args.dpi or int(preprocess_config.get("dpi", 600))
+    dpi = args.dpi if args.dpi is not None else int(preprocess_config.get("dpi", 600))
     image_format = preprocess_config.get("image_format", "JPEG")
     extension = preprocess_config.get("extension", "jpg")
 
     if not pdf_path.is_file():
         raise FileNotFoundError(f"PDF does not exist: {pdf_path}")
 
+    if dpi <= 0:
+        raise ValueError("DPI must be positive")
+    if image_dir.is_symlink():
+        raise ValueError("Image output directory may not be a symlink")
     image_dir.mkdir(parents=True, exist_ok=True)
-    pages = convert_from_path(pdf_path, dpi=dpi)
-    for index, image in enumerate(pages):
-        image.save(image_dir / f"page_{index}.{extension}", image_format)
+    previous = [p for p in image_dir.iterdir() if generated_page(p)]
+    if any(p.is_symlink() or not p.is_file() for p in previous):
+        raise ValueError("Generated page outputs must be regular files")
+    # Complete conversion first, so conversion failures leave existing pages intact.
+    with tempfile.TemporaryDirectory(prefix=".paper-stack-pages-", dir=image_dir.parent) as d:
+        staged = Path(d)
+        pages = convert_from_path(pdf_path, dpi=dpi)
+        if not pages:
+            raise ValueError("The PDF contains no renderable pages")
+        names = set()
+        for index, image in enumerate(pages):
+            name = f"page_{index}.{extension}"
+            image.save(staged / name, image_format)
+            image.close()
+            names.add(name)
+        if previous:
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            history = image_dir / "history" / stamp
+            history.mkdir(parents=True)
+            for old in previous:
+                shutil.copy2(old, history / old.name)
+        for name in names:
+            os.replace(staged / name, image_dir / name)
+        for old in previous:
+            if old.name not in names:
+                old.unlink()
 
     print(f"{paper_id}: wrote {len(pages)} page images to {image_dir}")
     return 0
+
+
+def stack_settings(config: dict, layout=None, thickness=None, gap=None) -> dict:
+    settings = copy.deepcopy(config)
+    mode = layout or settings.get("layout", "fan")
+    if mode not in {"fan", "stack"}:
+        raise ValueError("LAYOUT must be fan or stack")
+    if mode != "stack" and (thickness is not None or gap is not None):
+        raise ValueError("STACK_PAGE_THICKNESS and STACK_PAGE_GAP require LAYOUT=stack")
+    settings["layout"] = mode
+    compact = settings.setdefault("compact", {})
+    compact.setdefault("frame_stack", True)
+    if not isinstance(compact["frame_stack"], bool):
+        raise ValueError("compact.frame_stack must be a boolean")
+    defaults = {"page_thickness": 0.0012, "page_gap": 0.00008,
+                "rotation_sigma": 0.10, "rotation_limit": 0.25,
+                "position_sigma": 0.0005, "position_limit": 0.0015,
+                "outlier_fraction": 0.08, "outlier_distance": 0.008, "outlier_rotation": 0.18, "edge_curl": 0.0035, "paper_grain_distance": 0.00015,
+                "camera_margin": 1.12, "camera_elevation_degrees": 35.0, "camera_fstop": 4.0}
+    for key, default in defaults.items():
+        value = thickness if key == "page_thickness" and thickness is not None else gap if key == "page_gap" and gap is not None else compact.get(key, default)
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"compact.{key} must be a finite number") from exc
+        if not math.isfinite(value) or value < 0 or (key == "page_thickness" and value == 0):
+            raise ValueError(f"compact.{key} must be finite and nonnegative (thickness must be positive)")
+        compact[key] = value
+    if compact["camera_margin"] < 1 or not 5 <= compact["camera_elevation_degrees"] <= 85 or compact["camera_fstop"] <= 0:
+        raise ValueError("Stack camera requires margin >= 1, elevation 5..85 degrees and positive f-stop")
+    if compact["outlier_fraction"] > 1:
+        raise ValueError("compact.outlier_fraction must be between 0 and 1")
+    uv = compact.setdefault("focus_uv", [0.5, 0.76])
+    if not isinstance(uv, (list, tuple)) or len(uv) != 2 or any(not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v <= 1 for v in uv):
+        raise ValueError("compact.focus_uv must contain two normalized coordinates")
+    lighting = compact.get("lighting", {})
+    for key in ("spot_size_degrees", "energy", "radius", "fill_energy"):
+        if key in lighting:
+            value = lighting[key]
+            if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 or (key == "spot_size_degrees" and not 0 < value <= 180):
+                raise ValueError(f"Invalid compact.lighting.{key}")
+    return settings
 
 
 def write_scene_json(args: argparse.Namespace) -> int:
@@ -205,22 +321,41 @@ def write_scene_json(args: argparse.Namespace) -> int:
         args.random_variant,
     )
     output_blend = args.output_blend
-    if output_blend is None and args.variant is not None:
-        output_blend = f"prj/variants/{paper_id}_v{args.variant}.blend"
-    elif output_blend is None and args.random_variant:
-        output_blend = f"prj/variants/{paper_id}_random.blend"
+    mode = stack_settings(config["scene"].get("stack", {}), getattr(args, "layout", None),
+        getattr(args, "stack_page_thickness", None), getattr(args, "stack_page_gap", None))["layout"]
+    layout_stem = paper_id + ("_stack" if mode == "stack" else "")
+    if output_blend is None:
+        if args.variant is not None:
+            output_blend = f"prj/variants/{layout_stem}_v{args.variant}.blend"
+        elif args.random_variant:
+            output_blend = f"prj/variants/{layout_stem}_random.blend"
+        elif mode == "stack":
+            output_blend = f"prj/{layout_stem}.blend"
 
+    # Rendering a random layout keeps its recorded seeds; explicit builds draw anew.
+    if getattr(args, "reuse_random", False) and args.random_variant and Path(args.output).is_file():
+        old = json.loads(Path(args.output).read_text())
+        if old.get("variant", {}).get("mode") == "random" and old.get("random", {}).get("seeds") == config.get("random", {}).get("seeds"):
+            random_config, variant_metadata = old["random"], old["variant"]
+    scene = copy.deepcopy(config["scene"])
+    scene["stack"] = stack_settings(scene.get("stack", {}), getattr(args, "layout", None),
+        getattr(args, "stack_page_thickness", None), getattr(args, "stack_page_gap", None))
+    render = scene.setdefault("render", {})
+    for key in ("samples", "resolution", "denoise"):
+        value = getattr(args, key, None)
+        if value is not None:
+            render[key] = value
     scene_data = {
         "project_root": str(ROOT),
         "paper_id": paper_id,
         "paper": {
-            "pdf": str(resolve_path(paper["pdf"])),
-            "images": str(resolve_path(paper["images"])),
+            "pdf": str(resolve_path(getattr(args, "pdf", None) or paper["pdf"])),
+            "images": str(resolve_path(getattr(args, "images", None) or paper["images"])),
             "blend": str(resolve_path(output_blend or paper["blend"])),
             "render": str(resolve_path(paper.get("render", f"render/{paper_id}.png"))),
         },
         "random": random_config,
-        "scene": config["scene"],
+        "scene": scene,
         "assets": assets["assets"],
     }
     if variant_metadata:
@@ -250,6 +385,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     scene_json = subparsers.add_parser("scene-json")
     scene_json.add_argument("--paper", default=None)
+    scene_json.add_argument("--pdf", default=None)
+    scene_json.add_argument("--images", default=None)
+    scene_json.add_argument("--layout", choices=["fan", "stack"], default=None)
+    scene_json.add_argument("--stack-page-thickness", type=float, default=None)
+    scene_json.add_argument("--stack-page-gap", type=float, default=None)
     scene_json.add_argument("--output", default=None)
     scene_json.add_argument("--output-blend", default=None)
     variant_group = scene_json.add_mutually_exclusive_group()
@@ -267,7 +407,11 @@ def main(argv: list[str] | None = None) -> int:
         return write_assets_json(args)
     if args.command == "scene-json":
         if args.output is None:
-            paper_id, _ = selected_paper(load_pipeline(resolve_path(args.config)), args.paper)
+            config = load_pipeline(resolve_path(args.config))
+            paper_id, _ = selected_paper(config, args.paper)
+            mode = stack_settings(config["scene"].get("stack", {}), args.layout,
+                args.stack_page_thickness, args.stack_page_gap)["layout"]
+            paper_id += "_stack" if mode == "stack" else ""
             if args.variant is None and not args.random_variant:
                 args.output = f"build/{paper_id}.scene.json"
             elif args.random_variant:

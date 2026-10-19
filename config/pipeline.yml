@@ -70,6 +70,39 @@ scene:
     look: Very High Contrast
 
   stack:
+    # fan preserves the original spreading; stack makes a compact, visibly thick pile.
+    layout: fan
+    compact:
+      # Distances are fractions of the first page's height.
+      page_thickness: 0.0012
+      page_gap: 0.00008
+      rotation_sigma: 0.10
+      rotation_limit: 0.25
+      position_sigma: 0.0009
+      position_limit: 0.0025
+      # Shallow, correlated groups follow real loose-paper contours.
+      outlier_fraction: 0.08
+      outlier_distance: 0.008
+      outlier_rotation: 0.18
+      edge_curl: 0.0035
+      paper_grain_distance: 0.00015
+      # Show the whole pile and its front edge instead of the original close-up crop.
+      frame_stack: true
+      camera_margin: 1.12
+      # Tabletop placements follow the pile bounds. above = beyond its back edge.
+      # gap and along are fractions of page height; along shifts along that edge.
+      prop_placements:
+        fountain_pen: {side: right, gap: 0.055, along: -0.10}
+        paper_clip: {side: above, gap: 0.18, along: -0.20}
+      camera_elevation_degrees: 35
+      camera_fstop: 4.0
+      # Cover coordinates from bottom-left; adjust for each article's title block.
+      focus_uv: [0.50, 0.76]
+      lighting:
+        spot_size_degrees: 14
+        energy: 6500
+        radius: 0.25
+        fill_energy: 20
     z_offset: 0.0005
     y_offset_factor: 2.0
     degree_rotate_max: 1.5

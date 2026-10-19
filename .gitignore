@@ -178,3 +178,7 @@ img/*/page_*.png
 
 # Render outputs are regenerated locally; keep img/example.png for README display.
 render/
+
+# Generated page revisions and interrupted staging directories
+img/*/history/
+.paper-stack-*/

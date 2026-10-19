@@ -143,26 +143,29 @@ def set_transform(obj, transform: dict) -> None:
         obj.scale = transform["scale"]
 
 
-def object_world_z_bounds(obj) -> tuple[float, float] | None:
-    if obj.type == "EMPTY" or not hasattr(obj, "bound_box"):
-        return None
-
-    points = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
-    if not points:
-        return None
-    return min(point.z for point in points), max(point.z for point in points)
+def collection_world_points(collection):
+    """Use evaluated surface vertices: rotated bounding-box corners are not contact points."""
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    points = []
+    for obj in collection.all_objects:
+        if obj.hide_render or obj.type not in {"MESH", "CURVE", "SURFACE", "FONT", "META"}:
+            continue
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        try:
+            if mesh is not None:
+                points.extend(evaluated.matrix_world @ vertex.co for vertex in mesh.vertices)
+        finally:
+            evaluated.to_mesh_clear()
+    return points
 
 
 def collection_world_z_bounds(collection) -> tuple[float, float] | None:
-    bpy.context.view_layer.update()
-    bounds = [
-        bound
-        for obj in collection.all_objects
-        if (bound := object_world_z_bounds(obj)) is not None
-    ]
-    if not bounds:
+    points = collection_world_points(collection)
+    if not points:
         return None
-    return min(bound[0] for bound in bounds), max(bound[1] for bound in bounds)
+    return min(point.z for point in points), max(point.z for point in points)
 
 
 def align_collection_z(collection, root_object, align: str, target_z: float) -> None:
@@ -183,7 +186,9 @@ def align_collection_z(collection, root_object, align: str, target_z: float) -> 
         else:
             raise ValueError(f"Unsupported z_align {align!r}")
 
-    root_object.location.z += target_z - current_z
+    matrix = root_object.matrix_world.copy()
+    matrix.translation.z += target_z - current_z
+    root_object.matrix_world = matrix
     bpy.context.view_layer.update()
 
 
