@@ -86,6 +86,14 @@ scene:
       outlier_rotation: 0.18
       edge_curl: 0.0035
       paper_grain_distance: 0.00015
+      # Retain broad, restrained paper shading independently of geometric curl.
+      paper_surface_scale: 1.5
+      paper_surface_strength: 0.5
+      paper_surface_distance: 0.5
+      # Shared 3D world-XY field; seed offsets its measured Z=.5 slice.
+      # Only height attenuates with depth. Compare one variable on a frozen scene.
+      paper_surface_seed: 0
+      paper_surface_falloff: 1.0
       # Show the whole pile and its front edge instead of the original close-up crop.
       frame_stack: true
       camera_margin: 1.12

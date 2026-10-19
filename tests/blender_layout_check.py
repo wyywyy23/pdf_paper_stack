@@ -150,6 +150,10 @@ assert all(0<o['paper_index']<56 for o in outliers)
 assert all(abs(o.location.x)<.010 and abs(o.location.y-2)<.010 for o in outliers)
 curved=sorted(bpy.context.scene.objects,key=lambda o:o['paper_index'])
 assert len(curved[0].data.vertices)>100
+# Height is normalized independently of fixed shader strength.
+assert curved[0]['paper_surface_amplitude']==1.0
+assert curved[-1]['paper_surface_amplitude']==0
+assert all(a['paper_surface_amplitude']>=b['paper_surface_amplitude'] for a,b in zip(curved,curved[1:]))
 assert max(v.co.z for v in curved[0].data.vertices)>.002
 assert max(abs(v.co.z) for v in curved[-1].data.vertices)<1e-8
 # Check actual triangles over common XY points: layers must remain ordered.

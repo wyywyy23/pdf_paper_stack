@@ -85,6 +85,10 @@ def add_noise_bump(material: Any, bump_config: dict[str, Any], bsdf: Any) -> Any
     nodes = material.node_tree.nodes
     links = material.node_tree.links
     noise = nodes.new(type="ShaderNodeTexNoise")
+    noise.label = bump_config.get("label", "")
+    if "seed" in bump_config:
+        noise.noise_dimensions = "4D"
+        noise.inputs["W"].default_value = bump_config["seed"]
     noise.inputs["Scale"].default_value = bump_config.get("scale", 1000)
     noise.inputs["Detail"].default_value = bump_config.get("detail", 16)
     noise.inputs["Roughness"].default_value = bump_config.get("roughness", 0.5)
@@ -125,7 +129,12 @@ def configure_page_material(obj: Any, material_config: dict[str, Any]) -> None:
     macro_bump = add_noise_bump(material, material_config.get("macro_bump", {}), bsdf)
     links = material.node_tree.links
 
-    if bump and macro_bump:
+    if bump and macro_bump and material_config.get("normal_blend") == "layered":
+        # Feed the broad paper normal into the fine grain, rather than adding
+        # two normal vectors as RGB colors (which biases the surface normal).
+        links.new(macro_bump.outputs["Normal"], bump.inputs["Normal"])
+        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    elif bump and macro_bump:
         # Color add matches the original hand-tuned paper grain from the wood branch.
         combine_bump = material.node_tree.nodes.new(type="ShaderNodeMixRGB")
         combine_bump.blend_type = "ADD"
@@ -214,12 +223,16 @@ def build_compact_stack(images: list[Path], stack_config: dict[str, Any], rng: r
               "rotation_sigma": 0.10, "rotation_limit": 0.25,
               "position_sigma": 0.0005, "position_limit": 0.0015,
               "outlier_fraction": 0.08, "outlier_distance": 0.008, "outlier_rotation": 0.18,
-              "edge_curl": 0.0035, "paper_grain_distance": 0.00015}
+              "edge_curl": 0.0035, "paper_grain_distance": 0.00015,
+              "paper_surface_scale": 1.5, "paper_surface_strength": 0.5, "paper_surface_distance": 0.5,
+              "paper_surface_seed": 0.0, "paper_surface_falloff": 1.0}
     for key, default in values.items():
         value = float(compact.get(key, default))
         if not math.isfinite(value) or value < 0 or (key == "page_thickness" and value == 0):
             raise ValueError(f"Invalid compact-stack parameter: {key}")
         values[key] = value
+    if values["paper_surface_falloff"] <= 0:
+        raise ValueError("paper_surface_falloff must be positive")
     if values["outlier_fraction"] > 1:
         raise ValueError("outlier_fraction must be between 0 and 1")
     count = min(len(images) - 1, max(1, round((len(images) - 1) * values["outlier_fraction"]))) if values["outlier_fraction"] and len(images) > 2 else 0
@@ -238,24 +251,55 @@ def build_compact_stack(images: list[Path], stack_config: dict[str, Any], rng: r
     bsdf.inputs["Roughness"].default_value = 0.95
     set_bsdf_value(bsdf, ["Specular IOR Level", "Specular"], 0.12)
     reference_height = None
+    reference_width = None
     bottom_z = 0.0
     for index, image_path in enumerate(images):
         obj = import_page_plane(image_path)
-        material_config = dict(stack_config.get("material", {}))
-        # Real geometric bends must not be amplified by the old unit-distance
-        # procedural macro bump or Generated coordinates normalized through Z.
-        material_config["macro_bump"] = {"enabled": False}
-        material_config["bump"] = {**material_config.get("bump", {}), "distance": values["paper_grain_distance"], "strength": 0.10}
-        configure_page_material(obj, material_config)
-        for node in list(obj.data.materials[0].node_tree.nodes) if obj.data.materials and obj.data.materials[0].node_tree else []:
-            if node.type == "TEX_NOISE":
-                texcoord = obj.data.materials[0].node_tree.nodes.new(type="ShaderNodeTexCoord")
-                obj.data.materials[0].node_tree.links.new(texcoord.outputs["UV"], node.inputs["Vector"])
         bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY")
         if reference_height is None:
             reference_height = obj.dimensions.y
-            if reference_height <= 0:
-                raise ValueError("Page height must be positive")
+            reference_width = obj.dimensions.x
+            if reference_height <= 0 or reference_width <= 0:
+                raise ValueError("Page dimensions must be positive")
+        surface_depth = (len(images)-1-index)/(len(images)-1) if len(images)>1 else 1.0
+        surface_amplitude = surface_depth**values["paper_surface_falloff"]
+        obj["paper_surface_amplitude"] = surface_amplitude
+        material_config = dict(stack_config.get("material", {}))
+        # Keep silhouette/curl and surface shading independently adjustable.
+        # Fixing large wrinkles must preserve gentle paper-surface modulation.
+        # A common planar frame avoids amplification by Generated Z normalization.
+        material_config["normal_blend"] = "layered"
+        material_config["macro_bump"] = {
+            "enabled": surface_amplitude > 0,
+            "label": "Shared paper surface",
+            "scale": values["paper_surface_scale"], "detail": 0.5, "roughness": 0.5,
+            "strength": values["paper_surface_strength"],
+            "distance": values["paper_surface_distance"] * surface_amplitude,
+            "filter_width": 1.0,
+        }
+        material_config["bump"] = {**material_config.get("bump", {}), "distance": values["paper_grain_distance"], "strength": 0.10}
+        configure_page_material(obj, material_config)
+        if obj.data.materials and obj.data.materials[0].node_tree:
+            nodes = obj.data.materials[0].node_tree.nodes
+            links = obj.data.materials[0].node_tree.links
+            for node in list(nodes):
+                if node.type != "TEX_NOISE":
+                    continue
+                # Calibrated by one-factor renders on a frozen scene. The old
+                # flat mesh's Generated Z is measured as .5; 4D W=17 is a
+                # different field, not an equivalent seed for that material.
+                # Keep the shared 3D field fixed; attenuate height, not pattern.
+                geometry = nodes.new(type="ShaderNodeNewGeometry")
+                scale = nodes.new(type="ShaderNodeVectorMath")
+                scale.operation = "MULTIPLY"
+                scale.inputs[1].default_value = (1/reference_width, 1/reference_height, 0)
+                offset = nodes.new(type="ShaderNodeVectorMath")
+                offset.operation = "ADD"
+                seed = values["paper_surface_seed"] if node.label == "Shared paper surface" else 0
+                offset.inputs[1].default_value = (.5, .5-stack_config.get("y_offset_factor", 2.0), .5+seed)
+                links.new(geometry.outputs["Position"], scale.inputs[0])
+                links.new(scale.outputs["Vector"], offset.inputs[0])
+                links.new(offset.outputs["Vector"], node.inputs["Vector"])
         thickness = values["page_thickness"] * reference_height
         gap = values["page_gap"] * reference_height
         obj.location.y = obj.dimensions.y * stack_config.get("y_offset_factor", 2.0)

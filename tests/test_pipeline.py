@@ -239,8 +239,12 @@ class PipelineTests(unittest.TestCase):
 
 
 class CompactStyleValidationTests(unittest.TestCase):
+    def test_surface_defaults_match_calibrated_three_dimensional_field(self):
+        compact = ps.stack_settings({}, layout="stack")["compact"]
+        self.assertEqual((compact["paper_surface_strength"], compact["paper_surface_distance"], compact["paper_surface_seed"]), (0.5, 0.5, 0.0))
+
     def test_style_rejects_bad_focus_outliers_and_lights(self):
-        for compact in ({"focus_uv": [0.5, 2]}, {"outlier_fraction": 1.1}, {"edge_curl": -1}, {"lighting": {"energy": -1}}, {"lighting": {"spot_size_degrees": 0}}):
+        for compact in ({"focus_uv": [0.5, 2]}, {"outlier_fraction": 1.1}, {"edge_curl": -1}, {"paper_surface_strength": -1}, {"paper_surface_falloff": 0}, {"paper_surface_distance": float("nan")}, {"lighting": {"energy": -1}}, {"lighting": {"spot_size_degrees": 0}}):
             with self.assertRaises(ValueError):
                 ps.stack_settings({"compact": compact}, layout="stack")
 

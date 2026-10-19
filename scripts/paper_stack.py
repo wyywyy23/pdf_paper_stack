@@ -285,6 +285,8 @@ def stack_settings(config: dict, layout=None, thickness=None, gap=None) -> dict:
                 "rotation_sigma": 0.10, "rotation_limit": 0.25,
                 "position_sigma": 0.0005, "position_limit": 0.0015,
                 "outlier_fraction": 0.08, "outlier_distance": 0.008, "outlier_rotation": 0.18, "edge_curl": 0.0035, "paper_grain_distance": 0.00015,
+                "paper_surface_scale": 1.5, "paper_surface_strength": 0.5, "paper_surface_distance": 0.5,
+                "paper_surface_seed": 0.0, "paper_surface_falloff": 1.0,
                 "camera_margin": 1.12, "camera_elevation_degrees": 35.0, "camera_fstop": 4.0}
     for key, default in defaults.items():
         value = thickness if key == "page_thickness" and thickness is not None else gap if key == "page_gap" and gap is not None else compact.get(key, default)
@@ -297,6 +299,8 @@ def stack_settings(config: dict, layout=None, thickness=None, gap=None) -> dict:
         compact[key] = value
     if compact["camera_margin"] < 1 or not 5 <= compact["camera_elevation_degrees"] <= 85 or compact["camera_fstop"] <= 0:
         raise ValueError("Stack camera requires margin >= 1, elevation 5..85 degrees and positive f-stop")
+    if compact["paper_surface_falloff"] <= 0:
+        raise ValueError("compact.paper_surface_falloff must be positive")
     if compact["outlier_fraction"] > 1:
         raise ValueError("compact.outlier_fraction must be between 0 and 1")
     uv = compact.setdefault("focus_uv", [0.5, 0.76])
